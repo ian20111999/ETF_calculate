@@ -27,7 +27,7 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Data files (if any)
+# Data files
 *.csv
 *.xlsx
 *.xls
@@ -37,3 +37,11 @@ data_cache/
 
 # Logs
 *.log
+
+# Next.js
+frontend/.next/
+frontend/node_modules/
+frontend/.env.local
+
+# Archive
+_archive/

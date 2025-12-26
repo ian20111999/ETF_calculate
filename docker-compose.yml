@@ -1,0 +1,56 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8080
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data_cache:/app/data_cache
+    environment:
+      - PYTHONPATH=/app
+
+  # Development mode with hot reload
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: deps
+    command: npm run dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8080
+    depends_on:
+      - backend-dev
+    profiles:
+      - dev
+
+  backend-dev:
+    image: python:3.11-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install -r requirements.txt -r backend/requirements.txt &&
+             uvicorn backend.api.main:app --host 0.0.0.0 --port 8080 --reload"
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+    profiles:
+      - dev
