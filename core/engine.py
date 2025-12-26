@@ -116,6 +116,7 @@ class BacktestCalculator:
                 'monthly_return': row['Monthly_Return'],
                 'monthly_contribution': monthly_contribution,
                 'dividend_yield': dividend_yield / 100.0,
+                'year': row['Year'],  # 傳遞年份給稅務計算器
             }
             
             # 更新累計本金
