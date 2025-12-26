@@ -1,4 +1,6 @@
-# Simulation layer for Monte Carlo and scenario analysis
-# To be implemented in future iterations
+"""
+Simulation layer for Monte Carlo and scenario analysis
+"""
+from .monte_carlo import MonteCarloSimulator
 
-__all__ = []
+__all__ = ['MonteCarloSimulator']
