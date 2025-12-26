@@ -1,13 +1,17 @@
 import yfinance as yf
 import pandas as pd
 from datetime import datetime
+from typing import Dict, Optional, Union, List
 from core.calculator import MonthlyWealthCalculator
+from core.portfolio import Portfolio
+from data.fetcher import fetch_data
+
 
 class HistoricalDataFetcher:
     """獲取並處理歷史股價數據"""
 
     @staticmethod
-    def fetch_monthly_returns(ticker: str, start_year: int, end_year: int) -> pd.DataFrame:
+    def fetch_monthly_returns(ticker: str, start_year: int, end_year: int, use_cache: bool = True) -> pd.DataFrame:
         """
         獲取指定時間範圍內的月度報酬率。
 
@@ -15,6 +19,7 @@ class HistoricalDataFetcher:
             ticker (str): Yahoo Finance 的股票代碼 (e.g., "0050.TW")
             start_year (int): 開始年份
             end_year (int): 結束年份
+            use_cache (bool): 是否使用快取機制
 
         Returns:
             pd.DataFrame: 包含 'Year', 'Month', 'Monthly_Return' 的 DataFrame，
@@ -24,15 +29,29 @@ class HistoricalDataFetcher:
             start_date = f"{start_year}-01-01"
             end_date = f"{end_year+1}-01-01"  # 抓到隔年一月一日以確保包含年底數據
             
-            # 下載月度數據，'Adj Close' 會自動處理股息和分割
-            hist = yf.download(ticker, start=start_date, end=end_date, interval="1mo", progress=False)
+            # 使用快取機制下載月度數據
+            if use_cache:
+                hist = fetch_data(ticker, start_date=start_date, end_date=end_date, interval="1mo")
+            else:
+                # 直接下載，不使用快取
+                hist = yf.download(ticker, start=start_date, end=end_date, interval="1mo", progress=False)
             
             if hist.empty:
                 print(f"警告：無法獲取 {ticker} 在 {start_year}-{end_year} 的月度歷史數據")
                 return pd.DataFrame()
 
+            # 處理可能的多層索引列名
+            if isinstance(hist.columns, pd.MultiIndex):
+                hist.columns = hist.columns.droplevel(1)
+            
             # 計算月度報酬率
-            hist['Monthly_Return'] = hist['Adj Close'].pct_change()
+            if 'Adj Close' in hist.columns:
+                hist['Monthly_Return'] = hist['Adj Close'].pct_change()
+            elif 'Close' in hist.columns:
+                hist['Monthly_Return'] = hist['Close'].pct_change()
+            else:
+                print(f"警告：{ticker} 數據中找不到 'Adj Close' 或 'Close' 欄位")
+                return pd.DataFrame()
             
             # 清理數據
             hist.dropna(subset=['Monthly_Return'], inplace=True)
@@ -42,7 +61,8 @@ class HistoricalDataFetcher:
             returns_df = pd.DataFrame({
                 'Year': hist['Date'].dt.year,
                 'Month': hist['Date'].dt.month,
-                'Monthly_Return': hist['Monthly_Return']
+                'Monthly_Return': hist['Monthly_Return'],
+                'Ticker': ticker  # 添加股票代碼以支援多資產
             })
             
             return returns_df
@@ -50,14 +70,59 @@ class HistoricalDataFetcher:
         except Exception as e:
             print(f"獲取月度數據時發生錯誤 ({ticker}): {e}")
             return pd.DataFrame()
+    
+    @staticmethod
+    def fetch_portfolio_returns(tickers: List[str], start_year: int, end_year: int, use_cache: bool = True) -> Dict[str, pd.DataFrame]:
+        """
+        批量獲取多個標的的月度報酬率
+        
+        Args:
+            tickers: 股票代碼列表
+            start_year: 開始年份
+            end_year: 結束年份
+            use_cache: 是否使用快取
+        
+        Returns:
+            dict: 字典，key 為 ticker，value 為對應的 DataFrame
+        """
+        portfolio_returns = {}
+        
+        for ticker in tickers:
+            returns_df = HistoricalDataFetcher.fetch_monthly_returns(
+                ticker, start_year, end_year, use_cache
+            )
+            if not returns_df.empty:
+                portfolio_returns[ticker] = returns_df
+        
+        return portfolio_returns
 
 
 class BacktestCalculator:
-    """使用月度歷史數據進行回測的協調器"""
+    """使用月度歷史數據進行回測的協調器，支援單一資產和多資產組合"""
 
-    def __init__(self, monthly_calculator: MonthlyWealthCalculator, historical_returns: pd.DataFrame):
+    def __init__(self, 
+                 monthly_calculator: MonthlyWealthCalculator, 
+                 historical_returns: Union[pd.DataFrame, Dict[str, pd.DataFrame]],
+                 portfolio: Optional[Portfolio] = None):
+        """
+        初始化回測計算器
+        
+        Args:
+            monthly_calculator: 月度財富計算器
+            historical_returns: 歷史報酬率數據，可以是：
+                - 單一 DataFrame（單資產）
+                - Dict[ticker, DataFrame]（多資產）
+            portfolio: 投資組合對象（多資產時使用）
+        """
         self.monthly_calculator = monthly_calculator
         self.historical_returns = historical_returns
+        self.portfolio = portfolio
+        
+        # 判斷是單資產還是多資產
+        self.is_multi_asset = isinstance(historical_returns, dict)
+        
+        if self.is_multi_asset and portfolio is None:
+            raise ValueError("多資產回測需要提供 Portfolio 對象")
 
     def _run_simulation(self, initial_capital, monthly_contribution, dividend_yield):
         """內部函數，執行一次完整的模擬"""
@@ -170,3 +235,46 @@ class BacktestCalculator:
             df_with_leverage = pd.DataFrame() # 返回空的 DataFrame
             
         return df_regular, df_with_leverage
+    
+    def _run_simulation_multi_asset(self, 
+                                    initial_capital: float,
+                                    monthly_contribution: float,
+                                    dividend_yields: Dict[str, float],
+                                    target_weights: Dict[str, float]) -> pd.DataFrame:
+        """
+        執行多資產投資組合回測
+        
+        Args:
+            initial_capital: 初始資金
+            monthly_contribution: 每月定投
+            dividend_yields: 各資產殖利率字典，如 {'0050.TW': 3.2, '00878.TW': 6.0}
+            target_weights: 目標權重字典，如 {'0050.TW': 0.6, '00878.TW': 0.4}
+        
+        Returns:
+            pd.DataFrame: 回測結果
+        """
+        # 這是簡化版本，完整實作需要更複雜的邏輯
+        # 未來可以擴展支援動態再平衡、多資產槓桿等
+        
+        print("注意：多資產回測功能正在開發中，目前返回簡化版本")
+        
+        # 取得第一個資產的回測數據作為時間軸
+        first_ticker = list(self.historical_returns.keys())[0]
+        first_df = self.historical_returns[first_ticker]
+        
+        # 建立空的結果 DataFrame
+        results_df = pd.DataFrame({
+            'Year': first_df['Year'],
+            'Month': first_df['Month']
+        })
+        
+        # 添加組合報酬率（加權平均）
+        combined_returns = pd.Series(0.0, index=first_df.index)
+        for ticker, weight in target_weights.items():
+            if ticker in self.historical_returns:
+                combined_returns += self.historical_returns[ticker]['Monthly_Return'] * weight
+        
+        results_df['Monthly_Return'] = combined_returns * 100
+        results_df['Portfolio_Value'] = initial_capital
+        
+        return results_df

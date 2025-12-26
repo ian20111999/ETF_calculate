@@ -3,6 +3,7 @@ from .calculator import MonthlyWealthCalculator
 from .engine import BacktestCalculator, HistoricalDataFetcher
 from .tax import TaxCalculator
 from .risk import RiskEngine
+from .portfolio import Portfolio
 
 __all__ = [
     'MonthlyWealthCalculator',
@@ -10,4 +11,5 @@ __all__ = [
     'HistoricalDataFetcher',
     'TaxCalculator',
     'RiskEngine',
+    'Portfolio',
 ]

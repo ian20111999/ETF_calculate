@@ -32,5 +32,8 @@ htmlcov/
 *.xlsx
 *.xls
 
+# Cache
+data_cache/
+
 # Logs
 *.log
