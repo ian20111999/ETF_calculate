@@ -1,5 +1,5 @@
 import pytest
-from monthly_calculator import MonthlyWealthCalculator
+from core.calculator import MonthlyWealthCalculator
 
 # 建立一個可重複使用的計算器實例 fixture
 @pytest.fixture

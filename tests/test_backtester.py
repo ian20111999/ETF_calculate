@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
-from monthly_calculator import MonthlyWealthCalculator
-from backtester import BacktestCalculator
+from core.calculator import MonthlyWealthCalculator
+from core.engine import BacktestCalculator
 
 @pytest.fixture
 def mock_historical_returns():
