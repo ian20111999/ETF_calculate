@@ -29,6 +29,13 @@ ETF_METADATA = {
         "stock_dividend": 0.0,  # 股票股利率 %
         "yahoo_symbol": "00878.TW"
     },
+    "00919": {
+        "name": "00919 (群益台灣精選高息)",
+        "yield": 7.0,  # 現金殖利率 %
+        "cagr": 1.8,   # 股價成長率（不含息）%
+        "stock_dividend": 0.0,  # 股票股利率 %
+        "yahoo_symbol": "00919.TW"
+    },
     "2330": {
         "name": "2330 (台積電)",
         "yield": 2.0,  # 現金殖利率 %
